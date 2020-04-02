@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Streetwise</title>
+    <meta charset='utf-8'>
+	<meta name='viewport' content='width=device-width, initial-scale=1.0, user-scalable=no'>
+
+    <script src='https://unpkg.com/mapillary-js@2.20.0/dist/mapillary.min.js'></script>
+    <link href='https://unpkg.com/mapillary-js@2.20.0/dist/mapillary.min.css' rel='stylesheet' />
+
+    <style>
+        body { margin: 0; padding: 0; }
+        html, body { width: 100%; height: 100%; }
+
+        .viewer-container { position: absolute; top: 0; bottom: 0; width: 100%; }
+        .viewer { position: absolute; top: 0; height: 100%; z-index: 0; }
+        .left { left: 0; width: 50%; }
+        .right { right: 0; width: 50%; }
+        .full { left: 0; right: 0; }
+
+        .controls-container { background: white; position: absolute; top: 0; left: 0; padding: 5px; }
+        .controls-container > range { display: block; width: 200px; }
+        .controls-container > button {
+            display: block;
+            border: 1px solid black;
+            background-color: white;
+            color: black;
+            border-radius: none;
+            margin-top: 2px;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body>
+    <div class='viewer-container'>
+        <div id='mly1' class='viewer'></div>
+        <div id='mly2' class='viewer'></div>
+    </div>
+    <div class='controls-container' style='visibility:hidden'>
+        <div>
+            <button onclick='toggleRenderMode()'>Render mode</button>
+            <button onclick='resetView()'>Reset</button>
+        </div>
+        <div>
+            <button id="side-by-side-button" onclick='activateSideBySideMode()'>Side by side</button>
+            <button id="curtain-button" onclick='activateCurtainMode()'>Curtain</button>
+        </div>
+        <input type='range' min='0' max='1000' value=1000 disabled="disabled" id='curtain-range'/>
+    </div>
+    <script>
+        var CompareMode = {};
+        CompareMode[CompareMode["SideBySide"] = 0] = "SideBySide";
+        CompareMode[CompareMode["Curtain"] = 1] = "Curtain";
+
+        var clientId = 'QjI1NnU0aG5FZFZISE56U3R5aWN4Zzo3NTM1MjI5MmRjODZlMzc0';
+        var options = { component: { imagePlane: { imageTiling: true } } }
+
+        var mly1 = new Mapillary.Viewer('mly1', clientId, null, options);
+        var mly2 = new Mapillary.Viewer('mly2', clientId, null, options);
+
+        var mly1Container = mly1.getContainer();
+        var mly2Container = mly2.getContainer();
+
+        mly1.moveToKey('JW1utOJP4g7gk06HtYgQSQ').catch(function(e) { console.error(e); });
+        mly2.moveToKey('vQTjvdSJll7XoLiO-pgzZA').catch(function(e) { console.error(e); });
+
+        var state = {
+            compareMode: CompareMode.SideBySide,
+            curtain: 1,
+            renderMode: Mapillary.RenderMode.Fill,
+        };
+
+        function resize() {
+            mly1.resize();
+            mly2.resize();
+
+            if (state.compareMode === CompareMode.Curtain) {
+                moveCurtain(state.curtain);
+            }
+        }
+
+        function toggleRenderMode() {
+            state.renderMode = state.renderMode === Mapillary.RenderMode.Fill ?
+                Mapillary.RenderMode.Letterbox :
+                Mapillary.RenderMode.Fill;
+
+            mly1.setRenderMode(state.renderMode);
+            mly2.setRenderMode(state.renderMode);
+        }
+
+        function resetView() {
+            mly1.setCenter([0.5, 0.5]);
+            mly2.setCenter([0.5, 0.5]);
+
+            mly1.setZoom(0);
+            mly2.setZoom(0);
+        }
+
+        function activateSideBySideMode() {
+            state.comparemode = CompareMode.SideBySide;
+
+            mly1Container.classList.remove('full');
+            mly1Container.classList.add('left');
+
+            mly2Container.classList.remove('full');
+            mly2Container.classList.add('right');
+
+            document.getElementById('mly2').style.clipPath = '';
+            document.getElementById('mly2').style.clip = '';
+
+            mly1.activateComponent('sequence');
+            mly2.activateComponent('sequence');
+            mly1.activateComponent('direction');
+            mly2.activateComponent('direction');
+
+            document.getElementById('curtain-range').setAttribute('disabled', 'disabled');
+
+            document.getElementById('side-by-side-button').setAttribute('disabled', 'disabled');
+            document.getElementById('curtain-button').removeAttribute('disabled');
+
+            document.getElementById('side-by-side-button').style.color = '#CCCCCC';
+            document.getElementById('curtain-button').style.color = '#000000';
+
+            resize();
+        }
+
+        function activateCurtainMode() {
+            state.comparemode = CompareMode.Curtain;
+
+            mly1Container.classList.remove('left');
+            mly1Container.classList.add('full');
+
+            mly2Container.classList.remove('right');
+            mly2Container.classList.add('full');
+
+            mly1.deactivateComponent('sequence');
+            mly2.deactivateComponent('sequence');
+            mly1.deactivateComponent('direction');
+            mly2.deactivateComponent('direction');
+
+            moveCurtain(Number(document.getElementById('curtain-range').value) / 1000);
+
+            document.getElementById('curtain-range').removeAttribute('disabled');
+
+            document.getElementById('side-by-side-button').removeAttribute('disabled');
+            document.getElementById('curtain-button').setAttribute('disabled', 'disabled');
+
+            document.getElementById('side-by-side-button').style.color = '#000000';
+            document.getElementById('curtain-button').style.color = '#CCCCCC';
+
+            resize();
+        }
+
+        function moveCurtain(curtain) {
+            if (state.comparemode === CompareMode.SideBySide) {
+                return;
+            }
+
+            var mly2Container = document.getElementById('mly2');
+
+            var clientRect = mly2Container.getBoundingClientRect();
+            var clipPath = `inset(0px ${clientRect.width - curtain * clientRect.width}px 0px 0px)`;
+            var clip = `rect(0px, ${curtain * clientRect.width}px, ${clientRect.height}px, 0px)`;
+
+            mly2Container.style.clipPath = clipPath;
+            mly2Container.style.clip = clip;
+        }
+
+        function onCurtain(e) {
+            state.curtain = Number(e.target.value) / 1000;
+            moveCurtain(state.curtain);
+        };
+
+        var curtainRange = document.getElementById('curtain-range');
+
+        curtainRange.addEventListener('input', onCurtain);
+        curtainRange.addEventListener('change', onCurtain);
+
+        window.addEventListener('resize', resize);
+
+        activateSideBySideMode();
+    </script>
+</body>
+</html>
